@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>GPS Tracker</title>
+
+    <!-- Leaflet CSS -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #2563eb;
+        }
+
+        .card {
+            background: white;
+            padding: 16px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            box-shadow: 0 3px 10px #00000010;
+        }
+
+        button {
+            width: 100%;
+            padding: 13px;
+            margin-top: 8px;
+            border: none;
+            border-radius: 8px;
+            background: #2563eb;
+            color: white;
+            font-size: 16px;
+        }
+
+        button.stop {
+            background: #dc2626;
+        }
+
+        #map {
+            height: 350px;
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        #status {
+            font-weight: bold;
+        }
+
+        .coordinate {
+            overflow-wrap: anywhere;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+
+    <h1>📍 GPS Tracker</h1>
+
+    <div class="card">
+        <p>Status: <span id="status">Belum dimulai</span></p>
+
+        <button onclick="mulaiGPS()">
+            Mulai Lacak Lokasi Saya
+        </button>
+
+        <button class="stop" onclick="berhentiGPS()">
+            Berhenti Melacak
+        </button>
+    </div>
+
+    <div class="card">
+        <h3>Informasi Lokasi</h3>
+
+        <p id="latitude" class="coordinate">
+            Latitude: -
+        </p>
+
+        <p id="longitude" class="coordinate">
+            Longitude: -
+        </p>
+
+        <p id="akurasi">
+            Akurasi GPS: -
+        </p>
+
+        <button onclick="bagikanLokasi()">
+            Bagikan Lokasi Saya
+        </button>
+    </div>
+
+    <div class="card">
+        <h3>Peta Lokasi</h3>
+        <div id="map"></div>
+    </div>
+
+</div>
+
+<!-- Leaflet JavaScript -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // Membuat peta awal
+    const map = L.map("map").setView([-2.5, 118], 5);
+
+    // Mengambil tampilan peta OpenStreetMap
+    L.tileLayer(
+        "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap"
+        }
+    ).addTo(map);
+
+    let marker = null;
+    let lingkaran = null;
+    let watchId = null;
+    let lokasiTerakhir = null;
+
+    // Memulai pelacakan GPS
+    function mulaiGPS() {
+        if (!navigator.geolocation) {
+            alert("Browser tidak mendukung GPS.");
+            return;
+        }
+
+        if (watchId !== null) {
+            navigator.geolocation.clearWatch(watchId);
+        }
+
+        document.getElementById("status").textContent =
+            "Meminta izin lokasi...";
+
+        watchId = navigator.geolocation.watchPosition(
+            function(posisi) {
+                const lat = posisi.coords.latitude;
+                const lng = posisi.coords.longitude;
+                const akurasi = posisi.coords.accuracy;
+
+                lokasiTerakhir = {
+                    lat: lat,
+                    lng: lng
+                };
+
+                document.getElementById("status").textContent =
+                    "Lokasi berhasil ditemukan";
+
+                document.getElementById("latitude").textContent =
+                    "Latitude: " + lat.toFixed(6);
+
+                document.getElementById("longitude").textContent =
+                    "Longitude: " + lng.toFixed(6);
+
+                document.getElementById("akurasi").textContent =
+                    "Akurasi GPS: ±" +
+                    Math.round(akurasi) + " meter";
+
+                const titik = [lat, lng];
+
+                if (marker === null) {
+                    marker = L.marker(titik)
+                        .addTo(map)
+                        .bindPopup("Lokasi HP saya");
+
+                    lingkaran = L.circle(titik, {
+                        radius: akurasi
+                    }).addTo(map);
+                } else {
+                    marker.setLatLng(titik);
+
+                    lingkaran.setLatLng(titik);
+                    lingkaran.setRadius(akurasi);
+                }
+
+                map.setView(titik, 17);
+            },
+
+            function(error) {
+                const pesan = {
+                    1: "Izin lokasi ditolak.",
+                    2: "Lokasi tidak tersedia.",
+                    3: "Waktu mendapatkan lokasi habis."
+                };
+
+                document.getElementById("status").textContent =
+                    pesan[error.code] || "Terjadi kesalahan GPS.";
+            },
+
+            {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 20000
+            }
+        );
+    }
+
+    // Menghentikan pelacakan
+    function berhentiGPS() {
+        if (watchId !== null) {
+            navigator.geolocation.clearWatch(watchId);
+            watchId = null;
+        }
+
+        document.getElementById("status").textContent =
+            "Pelacakan dihentikan";
+    }
+
+    // Membagikan lokasi melalui aplikasi lain
+    function bagikanLokasi() {
+        if (!lokasiTerakhir) {
+            alert("Mulai GPS terlebih dahulu.");
+            return;
+        }
+
+        const lat = lokasiTerakhir.lat;
+        const lng = lokasiTerakhir.lng;
+
+        const link =
+            "https://www.google.com/maps?q=" + lat + "," + lng;
+
+        if (navigator.share) {
+            navigator.share({
+                title: "Lokasi GPS Saya",
+                text: "Ini lokasi yang saya bagikan.",
+                url: link
+            }).catch(function(error) {
+                console.log("Berbagi dibatalkan:", error);
+            });
+        } else {
+            window.open(link, "_blank");
+        }
+    }
+</script>
+
+</body>
+</html>
